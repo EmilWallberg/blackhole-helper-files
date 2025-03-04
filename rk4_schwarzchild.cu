@@ -23,7 +23,7 @@ __device__ void rk4_step(double& u, double& du, double& phi, double h) {
     du = du + (k1_du + 2 * k2_du + 2 * k3_du + k4_du) * h / 6;
 }
 
-__global__ void solve_geodesic_kernel(double u_0, double* du_0_values, double h, int num_paths, int num_steps, double* u_values, double* du_values, double* phi_values) {
+__global__ void solve_geodesic_kernel(double u_0, double* du_0_values, double h, int num_paths, int num_steps, double* u_values, double* du_values, double* phi_values, double* angles_out) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= num_paths) return;
 
@@ -31,30 +31,55 @@ __global__ void solve_geodesic_kernel(double u_0, double* du_0_values, double h,
     double du = du_0_values[idx];
     double phi = 0.0;
 
-    for (int step = 0; step < num_steps; step++) {
+    // Perform the first RK4 step
+    rk4_step(u, du, phi, h);
+
+    double r = 1.0 / u;
+    double r_0 = 1.0 / u_0;
+    double a = r * sin(phi);
+    double b = r * cos(phi) - r_0;
+
+    // Store starting angle
+    angles_out[idx * 3] = atan2(a, b);
+
+    u_values[idx * num_steps] = u;
+    du_values[idx * num_steps] = du;
+    phi_values[idx * num_steps ] = phi;
+
+    for (int step = 1; step < num_steps; step++) {
+        
+        if (1 / u < rs) break;
+        if (1 / u > 30.0) break;
+        rk4_step(u, du, phi, h);
+        if (1 / u > 30.0) break;
+        if (1 / u < rs) break;
+        
         u_values[idx * num_steps + step] = u;
         du_values[idx * num_steps + step] = du;
         phi_values[idx * num_steps + step] = phi;
-
-        rk4_step(u, du, phi, h);
     }
+    angles_out[idx * 3 + 1] = phi;
+    angles_out[idx * 3 + 2] = u;
+    printf("r = %f \n", 1/u);
 }
 
 extern "C" {
     __declspec(dllexport) void cuda_test(
         int num_paths, int num_steps, double u_0,
-        double* du_0_values, double h, double* u_out, double* phi_out) {
+        double* du_0_values, double h, double* u_out, double* phi_out, double* angle_out) {
 
         // Allocate device memory
         double* d_du_0_values;
         double* d_u_values;
         double* d_du_values;
         double* d_phi_values;
+        double* d_angle_values;
 
         cudaMalloc(&d_du_0_values, num_paths * sizeof(double));
         cudaMalloc(&d_u_values, num_paths * num_steps * sizeof(double));
         cudaMalloc(&d_du_values, num_paths * num_steps * sizeof(double));
         cudaMalloc(&d_phi_values, num_paths * num_steps * sizeof(double));
+        cudaMalloc(&d_angle_values, num_paths * 3 * sizeof(double));
 
 
         // Copy initial velocity values to device
@@ -63,15 +88,17 @@ extern "C" {
         // Launch kernel
         int threadsPerBlock = 256;
         int numBlocks = (num_paths + threadsPerBlock - 1) / threadsPerBlock;
-        solve_geodesic_kernel << <numBlocks, threadsPerBlock >> > (u_0, d_du_0_values, h, num_paths, num_steps, d_u_values, d_du_values, d_phi_values);
+        solve_geodesic_kernel << <numBlocks, threadsPerBlock >> > (u_0, d_du_0_values, h, num_paths, num_steps, d_u_values, d_du_values, d_phi_values, d_angle_values);
 
         // Copy results back to host
         cudaMemcpy(u_out, d_u_values, num_paths * num_steps * sizeof(double), cudaMemcpyDeviceToHost);
         cudaMemcpy(phi_out, d_phi_values, num_paths * num_steps * sizeof(double), cudaMemcpyDeviceToHost);
+        cudaMemcpy(angle_out, d_angle_values, num_paths * 3 * sizeof(double), cudaMemcpyDeviceToHost);
 
         cudaFree(d_du_0_values);
         cudaFree(d_u_values);
         cudaFree(d_du_values);
         cudaFree(d_phi_values);
+        cudaFree(d_angle_values);
     }
 }
