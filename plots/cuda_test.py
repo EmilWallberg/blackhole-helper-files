@@ -14,19 +14,22 @@ cuda_lib.cuda_test.argtypes = [
     ctypes.c_double,                    # u_0
     ctypes.POINTER(ctypes.c_double),    # du_0_values (input array)
     ctypes.c_double,                    # h step size
+    ctypes.c_double,                    # Tol tolerance 
     ctypes.POINTER(ctypes.c_double),    # u_out (output array for plot in py)
     ctypes.POINTER(ctypes.c_double),    # phi_out (output array for plot in py)
     ctypes.POINTER(ctypes.c_double),    # angle_out (output array)
 ]
 
-num_steps = 5000
+
+num_steps = 500000
 rs = 1.0
 r = 20
 u_0 = 1.0 / r
-h = 0.01
+h = 0.001
+tol = 0.001
 envmap_r = 30.0
 
-# Initial du_0 values as a numpy array (double precision)
+
 du_0_values = np.linspace(-2, 2, 100)
 num_paths = len(du_0_values)
 
@@ -37,14 +40,20 @@ angles_out = np.zeros(num_paths * 3, dtype=np.float64)
 
 # Call the CUDA function
 cuda_lib.cuda_test(rs, envmap_r, num_paths, num_steps, u_0,
-                   du_0_values.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), h,
+                   du_0_values.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), h, tol,
                    u_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                    phi_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                    angles_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
                    )
 
+# print("Hello World!")
+
 end_angle_values = angles_out[1::3]
 end_r_values = 1/angles_out[2::3]
+start_angle = angles_out[0::3]
+
+for i in range(len(start_angle)):
+    print("[s: {:.10f}, e: {:.10f}]".format(start_angle[i], end_angle_values[i]))
 
 fig, axs = plt.subplots(1, 2, figsize=(12, 6))
 
