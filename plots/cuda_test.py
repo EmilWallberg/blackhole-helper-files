@@ -9,7 +9,7 @@ speed_of_light = 299792458
 M = 1
 mass = 8.543e36
 
-a = 0.99
+a = 0.6
 Newton_G = 6.67408e-11
 r_s = 2 * Newton_G * mass / speed_of_light**2
 A = a * r_s / 2 # Might be unit conversion form SI units to Natrual units
@@ -20,7 +20,7 @@ plot_scale = 1.1
 
 
 # --- Parameters and settings ---
-n_rays = 50
+n_rays = 200
 max_steps = 1000
 state_dim = 5   # [r, theta, phi, p_r, p_theta]
 
@@ -121,11 +121,12 @@ lib.simulateRays.argtypes = [ctypes.c_size_t,
                              ctypes.c_size_t,
                              np.ctypeslib.ndpointer(dtype=np.double, flags='C_CONTIGUOUS'),
                              np.ctypeslib.ndpointer(dtype=np.double, flags='C_CONTIGUOUS'),
-                             np.ctypeslib.ndpointer(dtype=np.int32, flags='C_CONTIGUOUS')]
+                             np.ctypeslib.ndpointer(dtype=np.int32, flags='C_CONTIGUOUS'),
+                            ctypes.c_double]
 
 
 # Call the simulation.
-lib.simulateRays(n_rays, max_steps, init_conditions_flat, trajectories, steps_out)
+lib.simulateRays(n_rays, max_steps, init_conditions_flat, trajectories, steps_out, a)
 
 # --- Convert Boyer-Lindquist to Cartesian for plotting ---
 def boyer_lindquist_to_cartesian(R, T, P, A_param):
@@ -137,8 +138,8 @@ def boyer_lindquist_to_cartesian(R, T, P, A_param):
 
 # Use constant r_s (same as in the CUDA code) and A.
 # (Make sure these match the ones in your simulation.)
-r_s = 2 * 6.67408e-11 * 8.543e36 / (299792458.0**2)
-A = 0.99 * r_s / 2.0
+# r_s = 2 * 6.67408e-11 * 8.543e36 / (299792458.0**2)
+# A = 0.99 * r_s / 2.0
 
 fig = plt.figure(figsize=(10, 6))
 ax = fig.add_subplot(111)
@@ -154,8 +155,9 @@ for i in range(n_rays):
     
     # Filter out steps where the radius exceeds r_env
     r_phys = (r_s / 2) * r_arr
-    valid_steps = r_phys <= r_env
-    
+    valid_steps = (r_phys <= r_env) & (r_phys > r_s)
+
+
     # If there are no valid steps, skip plotting this ray
     if np.any(valid_steps):
         r_arr = r_arr[valid_steps]
