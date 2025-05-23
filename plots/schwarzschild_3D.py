@@ -114,5 +114,10 @@ def update(frame):
 
 anim = FuncAnimation(fig, update, frames=90, init_func=init, interval=50, blit=True)
 
+print("Using bib pillow to save gif...")
+anim = FuncAnimation(fig, update, frames=90, init_func=init, interval=50, blit=True)
+anim.save("geodesic_rotation.gif", writer='pillow', fps=20)
+
 plt.tight_layout()
 plt.show()
+
