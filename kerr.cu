@@ -196,6 +196,10 @@ __device__ float dp_theta(float r, float theta, float E, float L) {
   return -dW_theta_val / (2.0f * sig);
 }
 
+__device__ float Ke(float k, float E) { return k / (E * E); }
+
+__device__ float aLE(float L, float E) { return c_a * L / E; }
+
 // ---------------------------------------------------------------------
 // RK4 integration using c_a loop to compute k coefficients
 // The state vector y has 5 components.
